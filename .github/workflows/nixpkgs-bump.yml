@@ -58,27 +58,19 @@ jobs:
           path: nixpkgs
           fetch-depth: 0
 
-      - name: Sync fork with upstream master
+      - name: Sync fork with upstream master and fetch staging
         if: steps.ver.outputs.skip != 'true'
         working-directory: nixpkgs
         run: |
           git config user.name "Floatpane Bot"
           git config user.email "us@floatpane.com"
           git remote add upstream https://github.com/NixOS/nixpkgs.git
-          git fetch upstream master
+          git fetch upstream master staging
           git checkout master
           git reset --hard upstream/master
           git push origin master --force-with-lease
 
-      - name: Create bump branch
-        if: steps.ver.outputs.skip != 'true'
-        working-directory: nixpkgs
-        run: |
-          BRANCH="matcha-${{ steps.ver.outputs.version }}"
-          git checkout -b "$BRANCH"
-          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
-
-      - name: Get current version
+      - name: Get current version (from master)
         if: steps.ver.outputs.skip != 'true'
         id: current
         working-directory: nixpkgs
@@ -86,6 +78,19 @@ jobs:
           PKG=pkgs/by-name/ma/matcha/package.nix
           OLD=$(grep -E '^\s*version\s*=\s*"' "$PKG" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "old=$OLD" >> $GITHUB_OUTPUT
+
+      - name: Checkout staging for build verification
+        if: steps.ver.outputs.skip != 'true'
+        working-directory: nixpkgs
+        run: |
+          # Build against staging (has newer go) — final PR branch is rebased onto master later.
+          git checkout -B build-staging upstream/staging
+
+      - name: Set bump branch name
+        if: steps.ver.outputs.skip != 'true'
+        run: |
+          BRANCH="matcha-${{ steps.ver.outputs.version }}"
+          echo "BRANCH=$BRANCH" >> $GITHUB_ENV
 
       - name: Bump version and reset hashes
         if: steps.ver.outputs.skip != 'true'
@@ -133,6 +138,17 @@ jobs:
         if: steps.ver.outputs.skip != 'true'
         working-directory: nixpkgs
         run: nix-build -A matcha --no-out-link
+
+      - name: Move final package.nix onto master-based bump branch
+        if: steps.ver.outputs.skip != 'true'
+        working-directory: nixpkgs
+        run: |
+          PKG=pkgs/by-name/ma/matcha/package.nix
+          cp "$PKG" /tmp/package.nix.new
+          git checkout -- "$PKG"
+          git checkout master
+          git checkout -B "$BRANCH"
+          cp /tmp/package.nix.new "$PKG"
 
       - name: Commit and push
         if: steps.ver.outputs.skip != 'true'
