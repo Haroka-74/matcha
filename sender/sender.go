@@ -79,7 +79,10 @@ func (a *loginAuth) Next(fromServer []byte, more bool) ([]byte, error) {
 // randReader is the source of randomness for boundary generation. It is a
 // variable so tests can swap it with a deterministic or failing reader. By
 // default it is crypto/rand.Reader.
-var randReader io.Reader = rand.Reader
+var (
+	randReader io.Reader = rand.Reader
+	osHostname           = os.Hostname
+)
 
 // smimeOuterBoundary returns a fresh, high-entropy MIME boundary for an S/MIME
 // multipart/signed wrapper. If crypto/rand cannot supply randomness it returns
@@ -90,6 +93,16 @@ func smimeOuterBoundary() (string, error) {
 		return "", fmt.Errorf("smime: failed to read random bytes for outer boundary: %w", err)
 	}
 	return "signed-" + fmt.Sprintf("%x", rb[:]), nil
+}
+
+// smtpHelloHostname returns the hostname used in the SMTP HELO/EHLO greeting.
+// It falls back to localhost when the OS hostname cannot be read.
+func smtpHelloHostname() string {
+	hostname, err := osHostname()
+	if err != nil || strings.TrimSpace(hostname) == "" {
+		return "localhost"
+	}
+	return hostname
 }
 
 // generateMessageID creates a unique Message-ID header.
@@ -672,7 +685,7 @@ func SendEmail(account *config.Account, to, cc, bcc []string, subject, plainBody
 	}
 	defer c.Close()
 
-	if err = c.Hello("localhost"); err != nil {
+	if err = c.Hello(smtpHelloHostname()); err != nil {
 		return nil, err
 	}
 
@@ -884,7 +897,7 @@ func SendCalendarReply(account *config.Account, to []string, subject, plainBody 
 	}
 	defer c.Close()
 
-	if err = c.Hello("localhost"); err != nil {
+	if err = c.Hello(smtpHelloHostname()); err != nil {
 		return nil, err
 	}
 
