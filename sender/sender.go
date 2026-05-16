@@ -724,7 +724,7 @@ func SendEmail(account *config.Account, to, cc, bcc []string, subject, plainBody
 	}
 
 	// Send Envelope
-	if err = c.Mail(account.GetFetchEmail()); err != nil {
+	if err = c.Mail(account.GetSendAsEmail()); err != nil {
 		return nil, err
 	}
 	for _, r := range allRecipients {
@@ -929,7 +929,7 @@ func SendCalendarReply(account *config.Account, to []string, subject, plainBody 
 		}
 	}
 
-	if err = c.Mail(account.GetFetchEmail()); err != nil {
+	if err = c.Mail(account.GetSendAsEmail()); err != nil {
 		return nil, err
 	}
 	for _, r := range to {
